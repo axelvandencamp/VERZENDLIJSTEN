@@ -77,12 +77,12 @@ INSERT INTO _AV_temp_nazendingenopvolging
 		AND NOT(p.membership_nbr IN (SELECT lidnummer FROM _AV_temp_nazendingenopvolging tnop) )
 	);
 --====================================================================
--- INSERT recente leden huidige toestand
+-- INSERT recente leden 
 --====================================================================
 INSERT INTO _AV_temp_nazendingenopvolging
 	(
 	SELECT	DISTINCT p.membership_nbr lidnummer,
-		CASE WHEN v.npblad = 1 THEN 1 END npblad1,
+		1 npblad1,
 		CASE WHEN v.npblad = 1 THEN 0
 			 WHEN v.npblad = 2 THEN 1 END npblad2,
 		now()::date toevoeging
@@ -91,7 +91,7 @@ INSERT INTO _AV_temp_nazendingenopvolging
 		AND NOT(p.membership_nbr IN (SELECT lidnummer FROM _AV_temp_nazendingenopvolging) )
 	);
 --====================================================================
--- UPDATE 1: van recente lijst huidige toestand
+-- UPDATE recente leden nazending npblad1
 --====================================================================
 UPDATE _AV_temp_nazendingenopvolging
 SET npblad1 = 1, npblad2 = 0, toevoeging = now()::date
@@ -100,7 +100,39 @@ WHERE v.npblad = 1 AND _AV_temp_nazendingenopvolging.npblad1 = 0
 	AND _AV_temp_nazendingenopvolging.lidnummer IN (SELECT p.membership_nbr FROM	res_partner p
 							WHERE p.active = 't' AND COALESCE(p.deceased,'f') = 'f'
 							  AND p.membership_state IN ('paid','invoiced','free'));
-
-
-		
---=============================================================================
+--====================================================================
+-- UPDATE recente leden nazending npblad2 & npblad1 nog niet ontvangen
+--====================================================================
+UPDATE _AV_temp_nazendingenopvolging
+SET npblad1 = 1, npblad2 = 1, toevoeging = now()::date
+FROM _av_myvar v
+WHERE v.npblad = 2 AND _AV_temp_nazendingenopvolging.npblad1 = 0 AND  _AV_temp_nazendingenopvolging.npblad2 = 0
+	AND _AV_temp_nazendingenopvolging.lidnummer IN (SELECT p.membership_nbr FROM	res_partner p
+							WHERE p.active = 't' AND COALESCE(p.deceased,'f') = 'f'
+							  AND p.membership_state IN ('paid','invoiced','free'));
+--====================================================================
+-- UPDATE recente leden nazending npblad2 & npblad1 reeds ontvangen
+--====================================================================
+UPDATE _AV_temp_nazendingenopvolging
+SET npblad1 = 0, npblad2 = 1, toevoeging = now()::date
+FROM _av_myvar v
+WHERE v.npblad = 2 AND _AV_temp_nazendingenopvolging.npblad1 = 1 AND  _AV_temp_nazendingenopvolging.npblad2 = 0
+	AND _AV_temp_nazendingenopvolging.lidnummer IN (SELECT p.membership_nbr FROM	res_partner p
+							WHERE p.active = 't' AND COALESCE(p.deceased,'f') = 'f'
+							  AND p.membership_state IN ('paid','invoiced','free'));							  							 
+--====================================================================
+-- EXPORT: VERZENDLIJST nazending 
+-- + export
+--====================================================================
+SELECT nop.*, SQ1.*
+FROM _crm_partnerinfo() SQ1 
+	JOIN _AV_temp_nazendingenopvolging nop ON nop.lidnummer = SQ1.lidnummer
+WHERE nop.toevoeging = now()::date
+-- MANUEEL EXPORTEREN voor verwerking van verzending
+--====================================================================
+-- EXPORT: _AV_temp_nazendingenopvolging 
+-- + overschrijven "S:\Ledenadministratie\Databeheer\Upld\nazendingen opvolging utf8.csv"
+--====================================================================
+SELECT * FROM _AV_temp_nazendingenopvolging
+-- MANUEEL EXPORTEREN naar "S:\Ledenadministratie\Databeheer\Upld\nazendingen opvolging utf8.csv"
+-- vorige document overschrijven (backup van vorige versie bijhouden is uiteraard altijd safe)
